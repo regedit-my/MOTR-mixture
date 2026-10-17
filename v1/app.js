@@ -684,17 +684,6 @@ function bindUI() {
     renderAll();
   });
 
-  document.getElementById("reshuffleBtn").addEventListener("click", () => {
-    for (let i = state.participants.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [state.participants[i], state.participants[j]] = [
-        state.participants[j],
-        state.participants[i],
-      ];
-    }
-    renderAll();
-  });
-
   document.getElementById("animToggle").addEventListener("change", (e) => {
     state.animate = e.target.checked;
     drawScene(performance.now());
@@ -712,14 +701,7 @@ function renderAll() {
 }
 
 function renderStats() {
-  const el = document.getElementById("statLine");
   const hint = document.getElementById("emptyHint");
-  if (state.participants.length && state.routes.length) {
-    const per = Math.round(state.routes[0].length);
-    el.textContent = `${state.participants.length} участников · маршрут поровну, у каждого ~${per} px`;
-  } else {
-    el.textContent = "";
-  }
   hint.style.display = state.participants.length ? "none" : "block";
 }
 
@@ -755,7 +737,7 @@ function renderList() {
 
     const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
     const route = state.routes[idx];
-    const lenLabel = route ? `${Math.round(route.length)} px` : "";
+    const lenLabel = route ? `${Math.round(route.length)}` : "";
 
     li.innerHTML = `
       <span class="handle">⋮⋮</span>

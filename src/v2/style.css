@@ -27,6 +27,7 @@ body {
   padding: 14px 24px 0;
   max-width: 1100px;
   margin: 0 auto;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .topnav-link {
@@ -142,10 +143,17 @@ body {
 
 #quickCountSelect {
   flex: 1;
-  background: #0e0f14;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #0e0f14;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238b8e9c' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 6px;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
-  padding: 9px 10px;
+  padding: 9px 30px 9px 10px;
   color: var(--text);
   font-size: 14px;
   min-width: 0;
@@ -205,13 +213,10 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   padding: 7px 8px 7px 7px;
-  cursor: grab;
-  touch-action: none;
 }
 
 .participant-row.dragging {
   opacity: 0.45;
-  cursor: grabbing;
 }
 
 .participant-row .handle {
@@ -220,6 +225,12 @@ body {
   line-height: 1;
   padding: 0 2px;
   user-select: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.participant-row.dragging .handle {
+  cursor: grabbing;
 }
 
 .route-badge {
@@ -303,9 +314,15 @@ body {
 }
 
 /* В режиме просмотра по ссылке (?h=...) все элементы управления скрыты —
-   виден только результат: карта, анимация и список имён для чтения. */
+   виден только результат: карта, анимация и список имён для чтения.
+   Вкладки тоже прячем целиком: без "Редактор пресетов" (скрыт выше) в навигации
+   остаётся одна "Карта" — висящая в одиночестве вкладка смысла не несёт. */
 .view-mode .js-editable-control {
   display: none !important;
+}
+
+.view-mode .topnav {
+  display: none;
 }
 
 .view-mode .participant-row {

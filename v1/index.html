@@ -8,12 +8,9 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>Разделение пати — Weekday Instance</h1>
+    <h1>Разделение пати — Mixture Instance</h1>
     <p class="subtitle">
-      Подземелье делится на непересекающиеся ветки — по числу участников,
-      примерно поровну по длине. Каждый бегает только по своей ветке (никто не
-      дублирует чужой коридор). Добавь участников — ветки распределятся
-      автоматически, перетаскиванием можно поменять, кто какую бежит.
+      Подземелье делится на непересекающиеся ветки — по числу участников.
     </p>
   </header>
 
@@ -25,9 +22,6 @@
           <input type="checkbox" id="animToggle" checked />
           Анимация бега
         </label>
-        <button id="reshuffleBtn" class="btn btn-ghost" title="Случайно перемешать, кто какую линию бежит">
-          Перемешать линии
-        </button>
       </div>
     </section>
 
@@ -46,13 +40,11 @@
       <ol id="participantList" class="participant-list"></ol>
 
       <p id="emptyHint" class="empty-hint">
-        Добавь участников похода — каждому будет назначена своя линия
-        патрулирования. Перетащи строку вверх/вниз, чтобы поменять
+        Добавь участников похода — каждому будет назначена своя линия. Перетащи строку вверх/вниз, чтобы поменять
         участников линиями.
       </p>
 
       <div class="panel-footer">
-        <span id="statLine" class="stat-line"></span>
         <button id="clearBtn" class="btn btn-ghost btn-danger">Очистить всех</button>
       </div>
     </aside>

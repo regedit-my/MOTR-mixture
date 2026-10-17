@@ -14,7 +14,6 @@ const editorState: EditorState = {
   maps: {},
 };
 
-const EDITOR_STORAGE_KEY = "motr_editor_maps_v1";
 const HIT_RADIUS = 10; // px в координатах канвы (512x512)
 const EDGE_HIT_RADIUS = 8;
 const DBLCLICK_WINDOW_MS = 240; // пауза перед "добавить точку", чтобы успеть поймать dblclick
@@ -60,7 +59,7 @@ function normalizeMaps(raw: PresetData | null): Record<string, PresetMap> {
 
 async function fetchPreset(): Promise<PresetData | null> {
   try {
-    const r = await fetch(`/v2/preset.json`);
+    const r = await fetch(`preset.json`);
     return (await r.json()) as PresetData;
   } catch {
     return null;
@@ -68,24 +67,8 @@ async function fetchPreset(): Promise<PresetData | null> {
 }
 
 async function loadEditor(): Promise<void> {
-  let fromStorage: PresetData | null = null;
-  try {
-    const raw = localStorage.getItem(EDITOR_STORAGE_KEY);
-    if (raw) fromStorage = JSON.parse(raw) as PresetData;
-  } catch {
-    fromStorage = null;
-  }
-
-  editorState.maps = normalizeMaps(fromStorage ?? (await fetchPreset()));
+  editorState.maps = normalizeMaps(await fetchPreset());
   initEditorUI();
-}
-
-function saveToStorage(): void {
-  try {
-    localStorage.setItem(EDITOR_STORAGE_KEY, JSON.stringify({ maps: editorState.maps }));
-  } catch {
-    /* ignore */
-  }
 }
 
 /* ---------- инициализация UI ---------- */
@@ -170,7 +153,6 @@ function bindEditorButtons(): void {
 
   document.getElementById("clearPathBtn")!.addEventListener("click", () => {
     activePath().points = [];
-    saveToStorage();
     renderPlayers();
     drawEditorScene();
     updateJsonOutput();
@@ -178,7 +160,6 @@ function bindEditorButtons(): void {
 
   document.getElementById("resetPresetBtn")!.addEventListener("click", async () => {
     if (!confirm("Сбросить все несохранённые правки и перечитать preset.json?")) return;
-    localStorage.removeItem(EDITOR_STORAGE_KEY);
     editorState.maps = normalizeMaps(await fetchPreset());
     selectTab(editorState.activeN);
   });
@@ -270,7 +251,6 @@ function bindEditorCanvas(): void {
   editorCanvas.addEventListener("pointerup", (e) => {
     if (dragInfo) {
       dragInfo = null;
-      saveToStorage();
       renderPlayers();
       drawEditorScene();
       updateJsonOutput();
@@ -287,7 +267,6 @@ function bindEditorCanvas(): void {
     const timeoutId = window.setTimeout(() => {
       pendingAppend = null;
       activePath().points.push(p);
-      saveToStorage();
       renderPlayers();
       drawEditorScene();
       updateJsonOutput();
@@ -311,7 +290,6 @@ function bindEditorCanvas(): void {
         path.points.splice(segIdx + 1, 0, p);
       }
     }
-    saveToStorage();
     renderPlayers();
     drawEditorScene();
     updateJsonOutput();

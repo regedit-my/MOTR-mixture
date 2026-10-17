@@ -118,23 +118,16 @@ function bindUI(): void {
 function renderAll(): void {
   state.routes = buildRoutes(state.participants.length);
   renderList();
-  renderStats();
+  renderEmptyHint();
   renderDebug();
   drawScene(performance.now());
 }
 
-function renderStats(): void {
-  const el = document.getElementById("statLine")!;
+// Подсказка-заглушка нужна только в режиме выбора, пока ещё не выбрали число
+// игроков — в режиме просмотра (?h=...) или после выбора её прятать.
+function renderEmptyHint(): void {
   const hint = document.getElementById("emptyHint")!;
-  const n = state.participants.length;
-  if (n && state.routes.length === n) {
-    el.textContent = `${n} участников · маршруты из пресета _${n}`;
-  } else if (n) {
-    el.textContent = `Нет готового пресета для ${n} участников — нарисуй его в редакторе`;
-  } else {
-    el.textContent = "";
-  }
-  hint.style.display = n ? "none" : "block";
+  hint.style.display = !isViewMode && state.participants.length === 0 ? "block" : "none";
 }
 
 function renderList(): void {
@@ -171,7 +164,6 @@ function renderList(): void {
         const input = li.querySelector<HTMLInputElement>(".participant-name-input")!;
         input.addEventListener("input", () => {
           p.name = input.value;
-          renderStats();
           renderDebug();
           drawScene(performance.now());
         });
@@ -195,13 +187,15 @@ function renderList(): void {
     }
 
     if (!isViewMode) {
-      li.addEventListener("pointerdown", (e) => {
+      const handle = li.querySelector<HTMLSpanElement>(".handle")!;
+
+      handle.addEventListener("pointerdown", (e) => {
         dragFromIndex = idx;
         li.classList.add("dragging");
-        li.setPointerCapture(e.pointerId);
+        handle.setPointerCapture(e.pointerId);
       });
 
-      li.addEventListener("pointermove", (e) => {
+      handle.addEventListener("pointermove", (e) => {
         if (dragFromIndex === null) return;
         const rows = Array.from(list.querySelectorAll<HTMLLIElement>(".participant-row"));
         const hovered = rows.find((row) => {
@@ -226,8 +220,8 @@ function renderList(): void {
         renderList();
         drawScene(performance.now());
       };
-      li.addEventListener("pointerup", endDrag);
-      li.addEventListener("pointercancel", endDrag);
+      handle.addEventListener("pointerup", endDrag);
+      handle.addEventListener("pointercancel", endDrag);
     }
 
     list.appendChild(li);
@@ -387,7 +381,7 @@ export async function mountRuntime(): Promise<void> {
 
   const [loadedImg, presetData] = await Promise.all([
     loadMapImage(),
-    fetch(`/v2/preset.json`)
+    fetch(`preset.json`)
       .then((r) => r.json() as Promise<PresetData>)
       .catch(() => ({ maps: {} }) as PresetData),
   ]);
