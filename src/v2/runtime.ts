@@ -212,15 +212,7 @@ function renderList(): void {
     if (!isViewMode) {
       const handle = li.querySelector<HTMLSpanElement>(".handle")!;
 
-      // move/up вешаем на document, а не на handle: во время драга handle
-      // пересоздаётся при каждой перестановке строк (renderList внутри onMove),
-      // и любые слушатели/pointer capture на самом handle теряются вместе с
-      // ним — если финальный pointerup случится уже после пересоздания, он
-      // никуда не попадёт, и драг "залипнет". document не пересоздаётся никогда.
       handle.addEventListener("pointerdown", (e) => {
-        // Без этого браузер может начать нативное выделение текста при
-        // движении мышью по строкам — тогда pointermove продолжает идти, но
-        // визуально кажется, что драг не работает (перестановка не видна).
         e.preventDefault();
         dragFromIndex = idx;
         list.classList.add("dim-others");
