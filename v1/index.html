@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MOTR — Разделение пати по подземелью</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav style="padding:14px 24px 0;max-width:1100px;margin:0 auto;">
+    <a href="../index.html" style="color:#8b8e9c;text-decoration:none;font-size:13px;font-weight:600;">← Все версии</a>
+  </nav>
+  <header class="topbar">
+    <h1>Разделение пати — Weekday Instance</h1>
+    <p class="subtitle">
+      Подземелье делится на непересекающиеся ветки — по числу участников,
+      примерно поровну по длине. Каждый бегает только по своей ветке (никто не
+      дублирует чужой коридор). Добавь участников — ветки распределятся
+      автоматически, перетаскиванием можно поменять, кто какую бежит.
+    </p>
+  </header>
+
+  <main class="layout">
+    <section class="canvas-wrap">
+      <canvas id="mapCanvas" width="512" height="512"></canvas>
+      <div class="canvas-controls">
+        <label class="toggle">
+          <input type="checkbox" id="animToggle" checked />
+          Анимация бега
+        </label>
+        <button id="reshuffleBtn" class="btn btn-ghost" title="Случайно перемешать, кто какую линию бежит">
+          Перемешать линии
+        </button>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <form id="addForm" class="add-form">
+        <input
+          id="nameInput"
+          type="text"
+          placeholder="Имя участника"
+          autocomplete="off"
+          maxlength="24"
+        />
+        <button type="submit" class="btn btn-primary">Добавить</button>
+      </form>
+
+      <ol id="participantList" class="participant-list"></ol>
+
+      <p id="emptyHint" class="empty-hint">
+        Добавь участников похода — каждому будет назначена своя линия
+        патрулирования. Перетащи строку вверх/вниз, чтобы поменять
+        участников линиями.
+      </p>
+
+      <div class="panel-footer">
+        <span id="statLine" class="stat-line"></span>
+        <button id="clearBtn" class="btn btn-ghost btn-danger">Очистить всех</button>
+      </div>
+    </aside>
+  </main>
+
+  <section class="debug-wrap">
+    <div class="debug-header">
+      <strong>Debug: распарсенные маршруты</strong>
+      <label class="toggle">
+        <input type="checkbox" id="debugToggle" checked />
+        Показывать
+      </label>
+    </div>
+    <pre id="debugOutput" class="debug-output"></pre>
+  </section>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

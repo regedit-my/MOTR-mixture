@@ -1,0 +1,412 @@
+import { ROUTE_PALETTE, RUN_SPEED_PX_S } from "./constants";
+import { dist, pathLength } from "./geometry";
+import { loadMapImage } from "./image";
+import { copyToClipboard, decodeShareState, encodeShareState } from "./share";
+import type { Participant, PresetData, Route } from "./types";
+
+interface RuntimeState {
+  presetData: PresetData | null;
+  routes: Route[];
+  participants: Participant[];
+  animate: boolean;
+}
+
+const state: RuntimeState = {
+  presetData: null,
+  routes: [],
+  participants: [],
+  animate: true,
+};
+
+let nextId = 1;
+let dragFromIndex: number | null = null;
+let isViewMode = false;
+const editingIds = new Set<number>();
+
+let img: HTMLImageElement;
+let canvas: HTMLCanvasElement;
+let ctx: CanvasRenderingContext2D;
+
+/* ---------- маршруты из пресета ---------- */
+
+// Пресет под N участников — это N уже готовых замкнутых путей (нарисованы в
+// редакторе). Ничего не вычисляем — просто берём точки, добавляем в конец
+// копию первой точки (чтобы замкнуть контур той же логикой отрисовки, что и
+// для обычной ломаной), и считаем длину.
+function buildRoutes(n: number): Route[] {
+  const preset = state.presetData?.maps[`_${n}`];
+  if (!preset || preset.paths.length !== n) return [];
+
+  return preset.paths.map((p) => {
+    const raw = p.points;
+    if (raw.length < 2) return { points: raw.slice(), length: 0 };
+    const pts = raw.concat([raw[0]]);
+    return { points: pts, length: pathLength(pts) };
+  });
+}
+
+/* ---------- UI ---------- */
+
+// Пресет жёстко фиксирует число участников — N слотов, без отдельного
+// добавления/удаления по одному. names (если переданы, напр. из ?h=) задают
+// имена по порядку = по порядку назначаются и линии.
+function applyCount(n: number, names?: string[]): void {
+  const current = state.participants;
+  const next: Participant[] = [];
+  for (let i = 0; i < n; i++) {
+    const name = names?.[i] ?? current[i]?.name ?? "";
+    next.push({ id: nextId++, name });
+  }
+  state.participants = next;
+  editingIds.clear();
+
+  const select = document.getElementById("quickCountSelect") as HTMLSelectElement;
+  select.value = String(n);
+}
+
+function bindUI(): void {
+  document.getElementById("quickCountSelect")!.addEventListener("change", (e) => {
+    const n = parseInt((e.target as HTMLSelectElement).value, 10);
+    if (isNaN(n)) return;
+    applyCount(n);
+    renderAll();
+  });
+
+  // "Очистить всех" стирает только имена (оставляя число участников/линий как есть).
+  document.getElementById("clearBtn")!.addEventListener("click", () => {
+    state.participants.forEach((p) => (p.name = ""));
+    editingIds.clear();
+    renderAll();
+  });
+
+  document.getElementById("shareLinkBtn")!.addEventListener("click", async () => {
+    const hint = document.getElementById("shareLinkHint")!;
+    if (!state.participants.length) {
+      hint.textContent = "Сначала выбери число игроков";
+      setTimeout(() => (hint.textContent = ""), 1800);
+      return;
+    }
+    const encoded = encodeShareState({
+      n: state.participants.length,
+      names: state.participants.map((p) => p.name),
+    });
+    const url = `${location.origin}${location.pathname}?h=${encoded}#/`;
+    const copied = await copyToClipboard(url);
+    hint.textContent = copied ? "Ссылка скопирована" : "";
+    if (copied) setTimeout(() => (hint.textContent = ""), 1800);
+  });
+
+  document.getElementById("reshuffleBtn")!.addEventListener("click", () => {
+    for (let i = state.participants.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [state.participants[i], state.participants[j]] = [
+        state.participants[j],
+        state.participants[i],
+      ];
+    }
+    renderAll();
+  });
+
+  document.getElementById("animToggle")!.addEventListener("change", (e) => {
+    state.animate = (e.target as HTMLInputElement).checked;
+    drawScene(performance.now());
+  });
+
+  document.getElementById("debugToggle")!.addEventListener("change", renderDebug);
+}
+
+function renderAll(): void {
+  state.routes = buildRoutes(state.participants.length);
+  renderList();
+  renderStats();
+  renderDebug();
+  drawScene(performance.now());
+}
+
+function renderStats(): void {
+  const el = document.getElementById("statLine")!;
+  const hint = document.getElementById("emptyHint")!;
+  const n = state.participants.length;
+  if (n && state.routes.length === n) {
+    el.textContent = `${n} участников · маршруты из пресета _${n}`;
+  } else if (n) {
+    el.textContent = `Нет готового пресета для ${n} участников — нарисуй его в редакторе`;
+  } else {
+    el.textContent = "";
+  }
+  hint.style.display = n ? "none" : "block";
+}
+
+function renderList(): void {
+  const list = document.getElementById("participantList")!;
+  list.innerHTML = "";
+
+  state.participants.forEach((p, idx) => {
+    const li = document.createElement("li");
+    li.className = "participant-row";
+    li.dataset.idx = String(idx);
+
+    const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
+    const fallbackLabel = `Игрок ${idx + 1}`;
+    const isEditing = !isViewMode && editingIds.has(p.id);
+
+    li.innerHTML = `
+      ${isViewMode ? "" : '<span class="handle">⋮⋮</span>'}
+      <span class="route-badge" style="background:${color}">${idx + 1}</span>
+      ${
+        isEditing
+          ? `<input class="participant-name-input" type="text" maxlength="24" placeholder="${escapeHtml(fallbackLabel.toLowerCase())}" value="${escapeHtml(p.name)}" />`
+          : `<span class="participant-name">${escapeHtml(p.name || fallbackLabel)}</span>`
+      }
+      ${
+        isViewMode
+          ? ""
+          : `<button class="edit-btn" aria-label="${isEditing ? "Готово" : "Редактировать имя"}">${isEditing ? "✕" : "✎"}</button>`
+      }
+    `;
+
+    if (!isViewMode) {
+      const editBtn = li.querySelector(".edit-btn")!;
+      if (isEditing) {
+        const input = li.querySelector<HTMLInputElement>(".participant-name-input")!;
+        input.addEventListener("input", () => {
+          p.name = input.value;
+          renderStats();
+          renderDebug();
+          drawScene(performance.now());
+        });
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            editingIds.delete(p.id);
+            renderList();
+          }
+        });
+        editBtn.addEventListener("click", () => {
+          editingIds.delete(p.id);
+          renderList();
+        });
+        queueMicrotask(() => input.focus());
+      } else {
+        editBtn.addEventListener("click", () => {
+          editingIds.add(p.id);
+          renderList();
+        });
+      }
+    }
+
+    if (!isViewMode) {
+      li.addEventListener("pointerdown", (e) => {
+        dragFromIndex = idx;
+        li.classList.add("dragging");
+        li.setPointerCapture(e.pointerId);
+      });
+
+      li.addEventListener("pointermove", (e) => {
+        if (dragFromIndex === null) return;
+        const rows = Array.from(list.querySelectorAll<HTMLLIElement>(".participant-row"));
+        const hovered = rows.find((row) => {
+          const rect = row.getBoundingClientRect();
+          return e.clientY >= rect.top && e.clientY <= rect.bottom;
+        });
+        if (!hovered) return;
+        const toIdx = Number(hovered.dataset.idx);
+        if (toIdx !== dragFromIndex) {
+          const arr = state.participants;
+          [arr[dragFromIndex], arr[toIdx]] = [arr[toIdx], arr[dragFromIndex]];
+          dragFromIndex = toIdx;
+          renderList();
+          drawScene(performance.now());
+          const newRow = list.querySelector(`[data-idx="${toIdx}"]`);
+          newRow?.classList.add("dragging");
+        }
+      });
+
+      const endDrag = () => {
+        dragFromIndex = null;
+        renderList();
+        drawScene(performance.now());
+      };
+      li.addEventListener("pointerup", endDrag);
+      li.addEventListener("pointercancel", endDrag);
+    }
+
+    list.appendChild(li);
+  });
+}
+
+function escapeHtml(str: string): string {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Текстовый дамп распарсенных маршрутов (точки в пикселях картинки 512x512) —
+// чтобы видеть точные координаты вместо разглядывания картинки.
+function renderDebug(): void {
+  const pre = document.getElementById("debugOutput")!;
+  const on = (document.getElementById("debugToggle") as HTMLInputElement).checked;
+  pre.style.display = on ? "block" : "none";
+  if (!on) return;
+
+  if (!state.routes.length) {
+    pre.textContent = "Нет участников или нет пресета для текущего числа участников.";
+    return;
+  }
+
+  const lines = state.routes.map((route, idx) => {
+    const name = state.participants[idx]?.name || "(без имени)";
+    const pts = route.points.map((p) => `(${Math.round(p.x)},${Math.round(p.y)})`).join(" ");
+    return `#${idx + 1} ${name} — ${route.points.length} точек, ${Math.round(route.length)}px\n  ${pts}`;
+  });
+
+  pre.textContent = lines.join("\n\n");
+}
+
+/* ---------- отрисовка канвы ---------- */
+
+function pointAtDistance(points: Route["points"], cum: number[], d: number) {
+  if (d <= 0) return points[0];
+  const total = cum[cum.length - 1];
+  if (d >= total) return points[points.length - 1];
+  for (let i = 1; i < cum.length; i++) {
+    if (cum[i] >= d) {
+      const segLen = cum[i] - cum[i - 1];
+      const t = segLen === 0 ? 0 : (d - cum[i - 1]) / segLen;
+      const a = points[i - 1];
+      const b = points[i];
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+  }
+  return points[points.length - 1];
+}
+
+function cumulative(points: Route["points"]): number[] {
+  const cum = [0];
+  for (let i = 1; i < points.length; i++) cum.push(cum[i - 1] + dist(points[i - 1], points[i]));
+  return cum;
+}
+
+function drawScene(now: number): void {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  state.routes.forEach((route, idx) => {
+    const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
+    if (route.points.length < 2) return;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.shadowColor = "rgba(0,0,0,0.65)";
+    ctx.shadowBlur = 3;
+    ctx.beginPath();
+    ctx.moveTo(route.points[0].x, route.points[0].y);
+    for (let i = 1; i < route.points.length; i++) {
+      ctx.lineTo(route.points[i].x, route.points[i].y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    const start = route.points[0];
+    drawBadge(start.x, start.y, color, String(idx + 1));
+
+    if (state.animate) {
+      const cum = cumulative(route.points);
+      const total = cum[cum.length - 1];
+      if (total > 0) {
+        // Путь из пресета всегда замкнутый контур — бежим по кругу непрерывно.
+        const phase = (idx / Math.max(1, state.routes.length)) * total;
+        const t = ((now / 1000) * RUN_SPEED_PX_S + phase) % total;
+        const pos = pointAtDistance(route.points, cum, t);
+        drawRunner(pos.x, pos.y, color);
+        const name = state.participants[idx]?.name || `Игрок ${idx + 1}`;
+        drawNameLabel(pos.x, pos.y, name, color);
+      }
+    }
+  });
+}
+
+function drawBadge(x: number, y: number, color: string, label: string): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 9, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(0,0,0,0.6)";
+  ctx.stroke();
+  ctx.fillStyle = "#0e0f14";
+  ctx.font = "bold 10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x, y + 0.5);
+  ctx.restore();
+}
+
+function drawRunner(x: number, y: number, color: string): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Имя участника "ездит" вместе с бегущей точкой — привязано по центру сверху.
+function drawNameLabel(x: number, y: number, name: string, color: string): void {
+  ctx.save();
+  ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(0,0,0,0.75)";
+  ctx.strokeText(name, x, y - 9);
+  ctx.fillStyle = color;
+  ctx.fillText(name, x, y - 9);
+  ctx.restore();
+}
+
+function tick(now: number): void {
+  if (state.animate && state.routes.length) {
+    drawScene(now);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ---------- монтирование ---------- */
+
+export async function mountRuntime(): Promise<void> {
+  canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
+  ctx = canvas.getContext("2d")!;
+
+  const [loadedImg, presetData] = await Promise.all([
+    loadMapImage(),
+    fetch(`/v2/preset.json`)
+      .then((r) => r.json() as Promise<PresetData>)
+      .catch(() => ({ maps: {} }) as PresetData),
+  ]);
+
+  img = loadedImg;
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  state.presetData = presetData;
+
+  // Ссылка вида ?h=... — чужой готовый расклад открывается в режиме просмотра:
+  // имена/порядок подставлены, но ничего в нём менять нельзя.
+  const h = new URLSearchParams(location.search).get("h");
+  const shared = h ? decodeShareState(h) : null;
+  if (shared) {
+    isViewMode = true;
+    document.body.classList.add("view-mode");
+    applyCount(shared.n, shared.names);
+  }
+
+  bindUI();
+  renderAll();
+  requestAnimationFrame(tick);
+}

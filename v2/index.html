@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MOTR — пресеты</title>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="../index.html" class="topnav-link">← Все версии</a>
+    <a href="index.html" class="topnav-link active">Карта</a>
+    <a href="editor.html" class="topnav-link js-editable-control">Редактор пресетов</a>
+  </nav>
+
+  <header class="topbar">
+    <h1>Разделение пати — v2 (пресеты)</h1>
+    <p class="subtitle">
+      Маршруты не вычисляются — они берутся готовыми из <code>preset.json</code>
+      по числу участников.
+    </p>
+  </header>
+
+  <div class="layout">
+    <section class="canvas-wrap">
+      <canvas id="mapCanvas" width="512" height="512"></canvas>
+      <div class="canvas-controls">
+        <label class="toggle">
+          <input type="checkbox" id="animToggle" checked />
+          Анимация бега
+        </label>
+        <button id="reshuffleBtn" class="btn btn-ghost js-editable-control" title="Случайно перемешать, кто какую линию бежит">
+          Перемешать линии
+        </button>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="add-form js-editable-control">
+        <select id="quickCountSelect">
+          <option value="" disabled selected>Кол-во игроков</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+          <option value="11">11</option>
+          <option value="12">12</option>
+        </select>
+      </div>
+
+      <ol id="participantList" class="participant-list"></ol>
+
+      <p id="emptyHint" class="empty-hint">
+        Выбери число игроков (4–12) — пресет применится сразу, появится
+        ровно N линий. Впиши имена через значок карандаша у каждой строки.
+        Перетащи строку вверх/вниз, чтобы поменять участников линиями.
+      </p>
+
+      <span id="statLine" class="stat-line"></span>
+
+      <div class="panel-footer js-editable-control">
+        <button id="clearBtn" class="btn btn-ghost btn-danger">Очистить всех</button>
+      </div>
+      <div class="panel-footer js-editable-control">
+        <button id="shareLinkBtn" class="btn btn-primary">Скопировать ссылку</button>
+        <span id="shareLinkHint" class="stat-line"></span>
+      </div>
+    </aside>
+  </div>
+
+  <section class="debug-wrap">
+    <div class="debug-header">
+      <strong>Debug: распарсенные маршруты (из пресета)</strong>
+      <label class="toggle">
+        <input type="checkbox" id="debugToggle" checked />
+        Показывать
+      </label>
+    </div>
+    <pre id="debugOutput" class="debug-output"></pre>
+  </section>
+
+  <script type="module" src="/src/v2/main-runtime.ts"></script>
+</body>
+</html>

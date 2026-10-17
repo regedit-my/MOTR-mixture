@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MOTR — редактор пресетов</title>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="../index.html" class="topnav-link">← Все версии</a>
+    <a href="index.html" class="topnav-link">Карта</a>
+    <a href="editor.html" class="topnav-link active">Редактор пресетов</a>
+  </nav>
+
+  <section class="editor-wrap editor-wrap-standalone">
+    <div class="editor-title">
+      <h2>Редактор пресетов</h2>
+      <p class="subtitle">
+        Выбери вкладку (число участников), выбери игрока справа, кликай по карте —
+        точки добавляются в конец его пути. Путь всегда замкнутый контур.
+        Перетаскивание — подвинуть точку. Двойной клик по точке — удалить её.
+        Двойной клик по линии — вставить новую точку на ней.
+      </p>
+    </div>
+
+    <div class="editor-tabs" id="editorTabs"></div>
+
+    <div class="editor-body">
+      <div class="editor-canvas-col">
+        <canvas id="editorCanvas" width="512" height="512"></canvas>
+      </div>
+      <div class="editor-players" id="editorPlayers"></div>
+    </div>
+
+    <div class="editor-json-row">
+      <button id="copyPresetBtn" class="btn btn-primary">Скопировать JSON</button>
+      <button id="clearPathBtn" class="btn btn-ghost btn-danger">Очистить путь выбранного игрока</button>
+      <button id="resetPresetBtn" class="btn btn-ghost btn-danger">Сбросить всё (из preset.json)</button>
+      <span id="editorCopyHint" class="stat-line"></span>
+    </div>
+    <pre id="presetOutput" class="debug-output"></pre>
+  </section>
+
+  <script type="module" src="/src/v2/main-editor.ts"></script>
+</body>
+</html>
