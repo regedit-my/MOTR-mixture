@@ -34,6 +34,11 @@ let dragFromIndex = null;
 
 /* ---------- загрузка и разбор картинки ---------- */
 
+// В проде debug-панель убирается целиком (нужна только при разработке).
+if (!import.meta.env.DEV) {
+  document.getElementById("debugSection")?.remove();
+}
+
 const img = new Image();
 img.src = "assets/dungeon.png";
 img.onload = init;
@@ -695,7 +700,7 @@ function bindUI() {
     drawScene(performance.now());
   });
 
-  document.getElementById("debugToggle").addEventListener("change", renderDebug);
+  document.getElementById("debugToggle")?.addEventListener("change", renderDebug);
 }
 
 function renderAll() {
@@ -720,7 +725,8 @@ function renderStats() {
 
 function renderDebug() {
   const pre = document.getElementById("debugOutput");
-  const on = document.getElementById("debugToggle").checked;
+  if (!pre) return;
+  const on = document.getElementById("debugToggle")?.checked ?? false;
   pre.style.display = on ? "block" : "none";
   if (!on) return;
 

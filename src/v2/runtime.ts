@@ -112,7 +112,7 @@ function bindUI(): void {
     drawScene(performance.now());
   });
 
-  document.getElementById("debugToggle")!.addEventListener("change", renderDebug);
+  document.getElementById("debugToggle")?.addEventListener("change", renderDebug);
 }
 
 function renderAll(): void {
@@ -243,8 +243,9 @@ function escapeHtml(str: string): string {
 // Текстовый дамп распарсенных маршрутов (точки в пикселях картинки 512x512) —
 // чтобы видеть точные координаты вместо разглядывания картинки.
 function renderDebug(): void {
-  const pre = document.getElementById("debugOutput")!;
-  const on = (document.getElementById("debugToggle") as HTMLInputElement).checked;
+  const pre = document.getElementById("debugOutput");
+  if (!pre) return;
+  const on = (document.getElementById("debugToggle") as HTMLInputElement | null)?.checked ?? false;
   pre.style.display = on ? "block" : "none";
   if (!on) return;
 
