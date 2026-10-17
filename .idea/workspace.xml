@@ -5,15 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="89f3a62e-3610-41c4-b3f5-80d91eb5448a" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/v2/devMode.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/v2/main-editor.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/v2/main-editor.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/v2/main-runtime.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/v2/main-runtime.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/v1/app.js" beforeDir="false" afterPath="$PROJECT_DIR$/v1/app.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/v1/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/v1/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/v2/editor.html" beforeDir="false" afterPath="$PROJECT_DIR$/v2/editor.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/v2/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/v2/index.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -78,9 +70,21 @@
       <updated>1792248211484</updated>
       <workItem from="1792248212715" duration="8502000" />
     </task>
+    <task id="LOCAL-00001" summary="dev mode, public pages">
+      <created>1792274629554</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1792274629554</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="dev mode, public pages" />
+    <option name="LAST_COMMIT_MESSAGE" value="dev mode, public pages" />
   </component>
 </project>
