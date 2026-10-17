@@ -23,4 +23,7 @@ export interface Route {
 export interface Participant {
   id: number;
   name: string;
+  // Фиксируется один раз при создании слота и не меняется при перетаскивании —
+  // "Игрок N" едет вместе с участником, а не остаётся висеть на позиции.
+  defaultLabel: string;
 }

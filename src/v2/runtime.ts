@@ -56,7 +56,8 @@ function applyCount(n: number, names?: string[]): void {
   const next: Participant[] = [];
   for (let i = 0; i < n; i++) {
     const name = names?.[i] ?? current[i]?.name ?? "";
-    next.push({ id: nextId++, name });
+    const defaultLabel = current[i]?.defaultLabel ?? `Игрок ${i + 1}`;
+    next.push({ id: nextId++, name, defaultLabel });
   }
   state.participants = next;
   editingId = null;
@@ -172,7 +173,7 @@ function renderList(): void {
     li.dataset.idx = String(idx);
 
     const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
-    const fallbackLabel = `Игрок ${idx + 1}`;
+    const fallbackLabel = p.defaultLabel;
 
     li.innerHTML = `
       ${isViewMode ? "" : '<span class="handle">⋮⋮</span>'}
@@ -216,7 +217,11 @@ function renderList(): void {
       // и любые слушатели/pointer capture на самом handle теряются вместе с
       // ним — если финальный pointerup случится уже после пересоздания, он
       // никуда не попадёт, и драг "залипнет". document не пересоздаётся никогда.
-      handle.addEventListener("pointerdown", () => {
+      handle.addEventListener("pointerdown", (e) => {
+        // Без этого браузер может начать нативное выделение текста при
+        // движении мышью по строкам — тогда pointermove продолжает идти, но
+        // визуально кажется, что драг не работает (перестановка не видна).
+        e.preventDefault();
         dragFromIndex = idx;
         list.classList.add("dim-others");
         li.classList.add("dragging", "active-row");
@@ -359,7 +364,8 @@ function drawScene(now: number): void {
         const t = ((now / 1000) * RUN_SPEED_PX_S + phase) % total;
         const pos = pointAtDistance(route.points, cum, t);
         drawRunner(pos.x, pos.y, color);
-        const name = state.participants[idx]?.name || `Игрок ${idx + 1}`;
+        const participant = state.participants[idx];
+        const name = participant ? participant.name || participant.defaultLabel : `Игрок ${idx + 1}`;
         drawNameLabel(pos.x, pos.y, name, color);
       }
     }

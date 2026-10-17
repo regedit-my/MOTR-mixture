@@ -897,7 +897,11 @@ function renderList() {
       // и любые слушатели/pointer capture на самом handle теряются вместе с
       // ним — если финальный pointerup случится уже после пересоздания, он
       // никуда не попадёт, и драг "залипнет". document не пересоздаётся никогда.
-      handle.addEventListener("pointerdown", () => {
+      handle.addEventListener("pointerdown", (e) => {
+        // Без этого браузер может начать нативное выделение текста при
+        // движении мышью по строкам — тогда pointermove продолжает идти, но
+        // визуально кажется, что драг не работает (перестановка не видна).
+        e.preventDefault();
         dragFromIndex = idx;
         list.classList.add("dim-others");
         li.classList.add("dragging", "active-row");
