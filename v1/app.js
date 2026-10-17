@@ -31,6 +31,9 @@ const state = {
 
 let nextId = 1;
 let dragFromIndex = null;
+let isViewMode = false;
+let editingId = null;
+let editingOriginalName = "";
 
 /* ---------- загрузка и разбор картинки ---------- */
 
@@ -60,6 +63,16 @@ function init() {
   const grid = buildFloorGrid(imageData, off.width, off.height);
   state.gridSize = Math.floor(off.width / GRID_CELL);
   state.masterData = buildMasterData(grid, state.gridSize);
+
+  // Ссылка вида ?h=... — чужой готовый расклад открывается в режиме просмотра:
+  // имена/порядок подставлены, но ничего в нём менять нельзя.
+  const h = new URLSearchParams(location.search).get("h");
+  const sharedNames = h ? decodeShareState(h) : null;
+  if (sharedNames) {
+    isViewMode = true;
+    document.body.classList.add("view-mode");
+    state.participants = sharedNames.map((name) => ({ id: nextId++, name }));
+  }
 
   bindUI();
   renderAll();
@@ -666,6 +679,44 @@ function buildRoutes(n) {
   });
 }
 
+/* ---------- ссылка-шаринг ---------- */
+
+// Кодируем состав участников (имена и их порядок = назначение линий) в
+// компактную URL-safe строку для параметра ?h=... — маршруты детерминированы
+// (buildRoutes не использует Math.random), так что то же число участников
+// на том же пресете карты даст идентичный результат у получателя ссылки.
+function encodeShareState(names) {
+  const json = JSON.stringify({ names });
+  const b64 = btoa(unescape(encodeURIComponent(json)));
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeShareState(h) {
+  try {
+    const b64 = h.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const json = decodeURIComponent(escape(atob(padded)));
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed?.names)) return null;
+    return parsed.names.map((x) => String(x));
+  } catch {
+    return null;
+  }
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // упадёт в prompt ниже
+    }
+  }
+  prompt("Скопируй ссылку вручную:", text);
+  return false;
+}
+
 /* ---------- UI ---------- */
 
 function bindUI() {
@@ -681,7 +732,22 @@ function bindUI() {
 
   document.getElementById("clearBtn").addEventListener("click", () => {
     state.participants = [];
+    editingId = null;
     renderAll();
+  });
+
+  document.getElementById("shareLinkBtn").addEventListener("click", async () => {
+    const hint = document.getElementById("shareLinkHint");
+    if (!state.participants.length) {
+      hint.textContent = "Сначала добавь участников";
+      setTimeout(() => (hint.textContent = ""), 1800);
+      return;
+    }
+    const encoded = encodeShareState(state.participants.map((p) => p.name));
+    const url = `${location.origin}${location.pathname}?h=${encoded}#/`;
+    const copied = await copyToClipboard(url);
+    hint.textContent = copied ? "Ссылка скопирована" : "";
+    if (copied) setTimeout(() => (hint.textContent = ""), 1800);
   });
 
   document.getElementById("animToggle").addEventListener("change", (e) => {
@@ -690,6 +756,15 @@ function bindUI() {
   });
 
   document.getElementById("debugToggle")?.addEventListener("change", renderDebug);
+
+  // Клик/тап вне поля редактирования и вне кнопок-карандашей — выход из
+  // редактирования текущей строки (с применением/откатом имени, см. finishEditing).
+  document.addEventListener("pointerdown", (e) => {
+    if (editingId === null) return;
+    const target = e.target;
+    if (target.closest(".participant-name-input") || target.closest(".edit-btn")) return;
+    finishEditing();
+  });
 }
 
 function renderAll() {
@@ -702,7 +777,36 @@ function renderAll() {
 
 function renderStats() {
   const hint = document.getElementById("emptyHint");
-  hint.style.display = state.participants.length ? "none" : "block";
+  hint.style.display = !isViewMode && state.participants.length === 0 ? "block" : "none";
+}
+
+// Пустое имя при выходе из редактирования не применяется — остаётся то, что было.
+function commitOrRevertEditing(id) {
+  const p = state.participants.find((x) => x.id === id);
+  if (p && p.name.trim() === "") p.name = editingOriginalName;
+}
+
+// Переключение на редактирование другой строки сперва закрывает текущую
+// (применяя или откатывая её значение), а не оставляет обе строки открытыми.
+function startEditing(p) {
+  if (editingId !== null && editingId !== p.id) {
+    commitOrRevertEditing(editingId);
+  }
+  editingId = p.id;
+  editingOriginalName = p.name;
+  renderList();
+  renderDebug();
+  drawScene(performance.now());
+}
+
+function finishEditing() {
+  if (editingId === null) return;
+  commitOrRevertEditing(editingId);
+  editingId = null;
+  editingOriginalName = "";
+  renderList();
+  renderDebug();
+  drawScene(performance.now());
 }
 
 function renderDebug() {
@@ -728,11 +832,15 @@ function renderDebug() {
 
 function renderList() {
   const list = document.getElementById("participantList");
+  const anyActive = editingId !== null || dragFromIndex !== null;
+  list.classList.toggle("dim-others", anyActive);
   list.innerHTML = "";
 
   state.participants.forEach((p, idx) => {
     const li = document.createElement("li");
-    li.className = "participant-row";
+    const isEditing = !isViewMode && editingId === p.id;
+    const isDraggingThis = dragFromIndex !== null && dragFromIndex === idx;
+    li.className = "participant-row" + (isEditing || isDraggingThis ? " active-row" : "");
     li.dataset.idx = String(idx);
 
     const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
@@ -740,51 +848,95 @@ function renderList() {
     const lenLabel = route ? `${Math.round(route.length)}` : "";
 
     li.innerHTML = `
-      <span class="handle">⋮⋮</span>
+      ${isViewMode ? "" : '<span class="handle">⋮⋮</span>'}
       <span class="route-badge" style="background:${color}">${idx + 1}</span>
-      <span class="participant-name">${escapeHtml(p.name)}</span>
+      ${
+        isEditing
+          ? `<input class="participant-name-input" type="text" maxlength="24" value="${escapeHtml(p.name)}" />`
+          : `<span class="participant-name">${escapeHtml(p.name)}</span>`
+      }
       <span class="route-length">${lenLabel}</span>
-      <button class="remove-btn" aria-label="Удалить">×</button>
+      ${
+        isViewMode
+          ? ""
+          : `<button class="edit-btn" aria-label="${isEditing ? "Готово" : "Редактировать имя"}">${isEditing ? "✕" : "✎"}</button>
+             <button class="remove-btn" aria-label="Удалить">🗑</button>`
+      }
     `;
 
-    li.querySelector(".remove-btn").addEventListener("click", () => {
-      state.participants.splice(idx, 1);
-      renderAll();
-    });
-
-    li.addEventListener("pointerdown", (e) => {
-      dragFromIndex = idx;
-      li.classList.add("dragging");
-      li.setPointerCapture(e.pointerId);
-    });
-
-    li.addEventListener("pointermove", (e) => {
-      if (dragFromIndex === null) return;
-      const rows = Array.from(list.querySelectorAll(".participant-row"));
-      const hovered = rows.find((row) => {
-        const rect = row.getBoundingClientRect();
-        return e.clientY >= rect.top && e.clientY <= rect.bottom;
-      });
-      if (!hovered) return;
-      const toIdx = Number(hovered.dataset.idx);
-      if (toIdx !== dragFromIndex) {
-        const arr = state.participants;
-        [arr[dragFromIndex], arr[toIdx]] = [arr[toIdx], arr[dragFromIndex]];
-        dragFromIndex = toIdx;
-        renderList();
-        drawScene(performance.now());
-        const newRow = list.querySelector(`[data-idx="${toIdx}"]`);
-        if (newRow) newRow.classList.add("dragging");
+    if (!isViewMode) {
+      const editBtn = li.querySelector(".edit-btn");
+      if (isEditing) {
+        const input = li.querySelector(".participant-name-input");
+        input.addEventListener("input", () => {
+          p.name = input.value;
+          renderDebug();
+          drawScene(performance.now());
+        });
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") finishEditing();
+        });
+        editBtn.addEventListener("click", () => finishEditing());
+        queueMicrotask(() => input.focus());
+      } else {
+        editBtn.addEventListener("click", () => startEditing(p));
       }
-    });
 
-    const endDrag = () => {
-      dragFromIndex = null;
-      renderList();
-      drawScene(performance.now());
-    };
-    li.addEventListener("pointerup", endDrag);
-    li.addEventListener("pointercancel", endDrag);
+      li.querySelector(".remove-btn").addEventListener("click", () => {
+        if (editingId === p.id) editingId = null;
+        state.participants.splice(idx, 1);
+        renderAll();
+      });
+    }
+
+    if (!isViewMode) {
+      const handle = li.querySelector(".handle");
+
+      // move/up вешаем на document, а не на handle: во время драга handle
+      // пересоздаётся при каждой перестановке строк (renderList внутри onMove),
+      // и любые слушатели/pointer capture на самом handle теряются вместе с
+      // ним — если финальный pointerup случится уже после пересоздания, он
+      // никуда не попадёт, и драг "залипнет". document не пересоздаётся никогда.
+      handle.addEventListener("pointerdown", () => {
+        dragFromIndex = idx;
+        list.classList.add("dim-others");
+        li.classList.add("dragging", "active-row");
+        drawScene(performance.now());
+
+        const onMove = (e) => {
+          if (dragFromIndex === null) return;
+          const rows = Array.from(list.querySelectorAll(".participant-row"));
+          const hovered = rows.find((row) => {
+            const rect = row.getBoundingClientRect();
+            return e.clientY >= rect.top && e.clientY <= rect.bottom;
+          });
+          if (!hovered) return;
+          const toIdx = Number(hovered.dataset.idx);
+          if (toIdx !== dragFromIndex) {
+            const arr = state.participants;
+            [arr[dragFromIndex], arr[toIdx]] = [arr[toIdx], arr[dragFromIndex]];
+            dragFromIndex = toIdx;
+            renderList();
+            drawScene(performance.now());
+            const newRow = list.querySelector(`[data-idx="${toIdx}"]`);
+            if (newRow) newRow.classList.add("dragging");
+          }
+        };
+
+        const onUp = () => {
+          dragFromIndex = null;
+          renderList();
+          drawScene(performance.now());
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          document.removeEventListener("pointercancel", onUp);
+        };
+
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+        document.addEventListener("pointercancel", onUp);
+      });
+    }
 
     list.appendChild(li);
   });
@@ -824,11 +976,22 @@ function drawScene(now) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+  // Та же активная строка, что подсвечена в списке справа, — тот же индекс
+  // (маршрут привязан к позиции в state.participants, см. renderList).
+  const activeIdx =
+    dragFromIndex !== null
+      ? dragFromIndex
+      : editingId !== null
+        ? state.participants.findIndex((p) => p.id === editingId)
+        : -1;
+  const dimOthers = activeIdx !== -1;
+
   state.routes.forEach((route, idx) => {
     const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
     if (route.points.length < 2) return;
 
     ctx.save();
+    ctx.globalAlpha = dimOthers && idx !== activeIdx ? 0.25 : 1;
     ctx.strokeStyle = color;
     ctx.lineWidth = 3.5;
     ctx.lineJoin = "round";
@@ -841,7 +1004,6 @@ function drawScene(now) {
       ctx.lineTo(route.points[i].x, route.points[i].y);
     }
     ctx.stroke();
-    ctx.restore();
 
     const start = route.points[0];
     drawBadge(start.x, start.y, color, String(idx + 1));
@@ -856,8 +1018,12 @@ function drawScene(now) {
         const d = t > total ? cycle - t : t;
         const pos = pointAtDistance(route.points, cum, d);
         drawRunner(pos.x, pos.y, color);
+        const name = state.participants[idx]?.name || `Игрок ${idx + 1}`;
+        drawNameLabel(pos.x, pos.y, name, color);
       }
     }
+
+    ctx.restore();
   });
 }
 
@@ -887,6 +1053,20 @@ function drawRunner(x, y, color) {
   ctx.lineWidth = 2;
   ctx.strokeStyle = color;
   ctx.stroke();
+  ctx.restore();
+}
+
+// Имя участника "ездит" вместе с бегущей точкой — привязано по центру сверху.
+function drawNameLabel(x, y, name, color) {
+  ctx.save();
+  ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(0,0,0,0.75)";
+  ctx.strokeText(name, x, y - 9);
+  ctx.fillStyle = color;
+  ctx.fillText(name, x, y - 9);
   ctx.restore();
 }
 

@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>Разделение пати — Mixture Instance</h1>
+    <h1>Разделение пати</h1>
     <p class="subtitle">
       Подземелье делится на непересекающиеся ветки — по числу участников.
     </p>
@@ -26,7 +26,7 @@
     </section>
 
     <aside class="panel">
-      <form id="addForm" class="add-form">
+      <form id="addForm" class="add-form js-editable-control">
         <input
           id="nameInput"
           type="text"
@@ -44,8 +44,12 @@
         участников линиями.
       </p>
 
-      <div class="panel-footer">
+      <div class="panel-footer js-editable-control">
         <button id="clearBtn" class="btn btn-ghost btn-danger">Очистить всех</button>
+      </div>
+      <div class="panel-footer js-editable-control">
+        <button id="shareLinkBtn" class="btn btn-primary">Скопировать ссылку</button>
+        <span id="shareLinkHint" class="stat-line"></span>
       </div>
     </aside>
   </main>

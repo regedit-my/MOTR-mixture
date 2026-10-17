@@ -97,17 +97,6 @@ function bindUI(): void {
     if (copied) setTimeout(() => (hint.textContent = ""), 1800);
   });
 
-  document.getElementById("reshuffleBtn")!.addEventListener("click", () => {
-    for (let i = state.participants.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [state.participants[i], state.participants[j]] = [
-        state.participants[j],
-        state.participants[i],
-      ];
-    }
-    renderAll();
-  });
-
   document.getElementById("animToggle")!.addEventListener("change", (e) => {
     state.animate = (e.target as HTMLInputElement).checked;
     drawScene(performance.now());
