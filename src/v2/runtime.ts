@@ -21,7 +21,8 @@ const state: RuntimeState = {
 let nextId = 1;
 let dragFromIndex: number | null = null;
 let isViewMode = false;
-const editingIds = new Set<number>();
+let editingId: number | null = null;
+let editingOriginalName = "";
 
 let img: HTMLImageElement;
 let canvas: HTMLCanvasElement;
@@ -58,7 +59,7 @@ function applyCount(n: number, names?: string[]): void {
     next.push({ id: nextId++, name });
   }
   state.participants = next;
-  editingIds.clear();
+  editingId = null;
 
   const select = document.getElementById("quickCountSelect") as HTMLSelectElement;
   select.value = String(n);
@@ -75,7 +76,7 @@ function bindUI(): void {
   // "Очистить всех" стирает только имена (оставляя число участников/линий как есть).
   document.getElementById("clearBtn")!.addEventListener("click", () => {
     state.participants.forEach((p) => (p.name = ""));
-    editingIds.clear();
+    editingId = null;
     renderAll();
   });
 
@@ -113,6 +114,15 @@ function bindUI(): void {
   });
 
   document.getElementById("debugToggle")?.addEventListener("change", renderDebug);
+
+  // Клик/тап вне поля редактирования и вне кнопок-карандашей — выход из
+  // редактирования текущей строки (с применением/откатом имени, см. finishEditing).
+  document.addEventListener("pointerdown", (e) => {
+    if (editingId === null) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(".participant-name-input") || target.closest(".edit-btn")) return;
+    finishEditing();
+  });
 }
 
 function renderAll(): void {
@@ -130,18 +140,50 @@ function renderEmptyHint(): void {
   hint.style.display = !isViewMode && state.participants.length === 0 ? "block" : "none";
 }
 
+// Пустое имя при выходе из редактирования не применяется — остаётся то, что было.
+function commitOrRevertEditing(id: number): void {
+  const p = state.participants.find((x) => x.id === id);
+  if (p && p.name.trim() === "") p.name = editingOriginalName;
+}
+
+// Переключение на редактирование другой строки сперва закрывает текущую
+// (применяя или откатывая её значение), а не оставляет обе строки открытыми.
+function startEditing(p: Participant): void {
+  if (editingId !== null && editingId !== p.id) {
+    commitOrRevertEditing(editingId);
+  }
+  editingId = p.id;
+  editingOriginalName = p.name;
+  renderList();
+  renderDebug();
+  drawScene(performance.now());
+}
+
+function finishEditing(): void {
+  if (editingId === null) return;
+  commitOrRevertEditing(editingId);
+  editingId = null;
+  editingOriginalName = "";
+  renderList();
+  renderDebug();
+  drawScene(performance.now());
+}
+
 function renderList(): void {
   const list = document.getElementById("participantList")!;
+  const anyActive = editingId !== null || dragFromIndex !== null;
+  list.classList.toggle("dim-others", anyActive);
   list.innerHTML = "";
 
   state.participants.forEach((p, idx) => {
     const li = document.createElement("li");
-    li.className = "participant-row";
+    const isEditing = !isViewMode && editingId === p.id;
+    const isDraggingThis = dragFromIndex !== null && dragFromIndex === idx;
+    li.className = "participant-row" + (isEditing || isDraggingThis ? " active-row" : "");
     li.dataset.idx = String(idx);
 
     const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
     const fallbackLabel = `Игрок ${idx + 1}`;
-    const isEditing = !isViewMode && editingIds.has(p.id);
 
     li.innerHTML = `
       ${isViewMode ? "" : '<span class="handle">⋮⋮</span>'}
@@ -168,60 +210,62 @@ function renderList(): void {
           drawScene(performance.now());
         });
         input.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") {
-            editingIds.delete(p.id);
-            renderList();
-          }
+          if (e.key === "Enter") finishEditing();
         });
-        editBtn.addEventListener("click", () => {
-          editingIds.delete(p.id);
-          renderList();
-        });
+        editBtn.addEventListener("click", () => finishEditing());
         queueMicrotask(() => input.focus());
       } else {
-        editBtn.addEventListener("click", () => {
-          editingIds.add(p.id);
-          renderList();
-        });
+        editBtn.addEventListener("click", () => startEditing(p));
       }
     }
 
     if (!isViewMode) {
       const handle = li.querySelector<HTMLSpanElement>(".handle")!;
 
-      handle.addEventListener("pointerdown", (e) => {
+      // move/up вешаем на document, а не на handle: во время драга handle
+      // пересоздаётся при каждой перестановке строк (renderList внутри onMove),
+      // и любые слушатели/pointer capture на самом handle теряются вместе с
+      // ним — если финальный pointerup случится уже после пересоздания, он
+      // никуда не попадёт, и драг "залипнет". document не пересоздаётся никогда.
+      handle.addEventListener("pointerdown", () => {
         dragFromIndex = idx;
-        li.classList.add("dragging");
-        handle.setPointerCapture(e.pointerId);
-      });
+        list.classList.add("dim-others");
+        li.classList.add("dragging", "active-row");
+        drawScene(performance.now());
 
-      handle.addEventListener("pointermove", (e) => {
-        if (dragFromIndex === null) return;
-        const rows = Array.from(list.querySelectorAll<HTMLLIElement>(".participant-row"));
-        const hovered = rows.find((row) => {
-          const rect = row.getBoundingClientRect();
-          return e.clientY >= rect.top && e.clientY <= rect.bottom;
-        });
-        if (!hovered) return;
-        const toIdx = Number(hovered.dataset.idx);
-        if (toIdx !== dragFromIndex) {
-          const arr = state.participants;
-          [arr[dragFromIndex], arr[toIdx]] = [arr[toIdx], arr[dragFromIndex]];
-          dragFromIndex = toIdx;
+        const onMove = (e: PointerEvent) => {
+          if (dragFromIndex === null) return;
+          const rows = Array.from(list.querySelectorAll<HTMLLIElement>(".participant-row"));
+          const hovered = rows.find((row) => {
+            const rect = row.getBoundingClientRect();
+            return e.clientY >= rect.top && e.clientY <= rect.bottom;
+          });
+          if (!hovered) return;
+          const toIdx = Number(hovered.dataset.idx);
+          if (toIdx !== dragFromIndex) {
+            const arr = state.participants;
+            [arr[dragFromIndex], arr[toIdx]] = [arr[toIdx], arr[dragFromIndex]];
+            dragFromIndex = toIdx;
+            renderList();
+            drawScene(performance.now());
+            const newRow = list.querySelector(`[data-idx="${toIdx}"]`);
+            newRow?.classList.add("dragging");
+          }
+        };
+
+        const onUp = () => {
+          dragFromIndex = null;
           renderList();
           drawScene(performance.now());
-          const newRow = list.querySelector(`[data-idx="${toIdx}"]`);
-          newRow?.classList.add("dragging");
-        }
-      });
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          document.removeEventListener("pointercancel", onUp);
+        };
 
-      const endDrag = () => {
-        dragFromIndex = null;
-        renderList();
-        drawScene(performance.now());
-      };
-      handle.addEventListener("pointerup", endDrag);
-      handle.addEventListener("pointercancel", endDrag);
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+        document.addEventListener("pointercancel", onUp);
+      });
     }
 
     list.appendChild(li);
@@ -285,11 +329,22 @@ function drawScene(now: number): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+  // Та же активная строка, что подсвечена в списке справа, — тот же индекс
+  // (маршрут привязан к слоту-позиции, а не к id участника, см. buildRoutes).
+  const activeIdx =
+    dragFromIndex !== null
+      ? dragFromIndex
+      : editingId !== null
+        ? state.participants.findIndex((p) => p.id === editingId)
+        : -1;
+  const dimOthers = activeIdx !== -1;
+
   state.routes.forEach((route, idx) => {
     const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
     if (route.points.length < 2) return;
 
     ctx.save();
+    ctx.globalAlpha = dimOthers && idx !== activeIdx ? 0.25 : 1;
     ctx.strokeStyle = color;
     ctx.lineWidth = 3.5;
     ctx.lineJoin = "round";
@@ -302,7 +357,6 @@ function drawScene(now: number): void {
       ctx.lineTo(route.points[i].x, route.points[i].y);
     }
     ctx.stroke();
-    ctx.restore();
 
     const start = route.points[0];
     drawBadge(start.x, start.y, color, String(idx + 1));
@@ -320,6 +374,8 @@ function drawScene(now: number): void {
         drawNameLabel(pos.x, pos.y, name, color);
       }
     }
+
+    ctx.restore();
   });
 }
 

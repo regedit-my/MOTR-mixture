@@ -213,10 +213,17 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   padding: 7px 8px 7px 7px;
+  transition: opacity 0.15s ease;
 }
 
-.participant-row.dragging {
-  opacity: 0.45;
+/* Пока идёт драг или редактирование одной строки — остальные притушены,
+   активная строка (та, с которой сейчас взаимодействуют) остаётся яркой. */
+.participant-list.dim-others .participant-row {
+  opacity: 0.4;
+}
+
+.participant-list.dim-others .participant-row.active-row {
+  opacity: 1;
 }
 
 .participant-row .handle {
