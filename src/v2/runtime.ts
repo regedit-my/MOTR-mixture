@@ -28,12 +28,6 @@ let img: HTMLImageElement;
 let canvas: HTMLCanvasElement;
 let ctx: CanvasRenderingContext2D;
 
-/* ---------- маршруты из пресета ---------- */
-
-// Пресет под N участников — это N уже готовых замкнутых путей (нарисованы в
-// редакторе). Ничего не вычисляем — просто берём точки, добавляем в конец
-// копию первой точки (чтобы замкнуть контур той же логикой отрисовки, что и
-// для обычной ломаной), и считаем длину.
 function buildRoutes(n: number): Route[] {
   const preset = state.presetData?.maps[`_${n}`];
   if (!preset || preset.paths.length !== n) return [];
@@ -46,11 +40,6 @@ function buildRoutes(n: number): Route[] {
   });
 }
 
-/* ---------- UI ---------- */
-
-// Пресет жёстко фиксирует число участников — N слотов, без отдельного
-// добавления/удаления по одному. names (если переданы, напр. из ?h=) задают
-// имена по порядку = по порядку назначаются и линии.
 function applyCount(n: number, names?: string[]): void {
   const current = state.participants;
   const next: Participant[] = [];
@@ -74,7 +63,6 @@ function bindUI(): void {
     renderAll();
   });
 
-  // "Очистить всех" стирает только имена (оставляя число участников/линий как есть).
   document.getElementById("clearBtn")!.addEventListener("click", () => {
     state.participants.forEach((p) => (p.name = ""));
     editingId = null;
@@ -105,8 +93,6 @@ function bindUI(): void {
 
   document.getElementById("debugToggle")?.addEventListener("change", renderDebug);
 
-  // Клик/тап вне поля редактирования и вне кнопок-карандашей — выход из
-  // редактирования текущей строки (с применением/откатом имени, см. finishEditing).
   document.addEventListener("pointerdown", (e) => {
     if (editingId === null) return;
     const target = e.target as HTMLElement;
@@ -123,21 +109,16 @@ function renderAll(): void {
   drawScene(performance.now());
 }
 
-// Подсказка-заглушка нужна только в режиме выбора, пока ещё не выбрали число
-// игроков — в режиме просмотра (?h=...) или после выбора её прятать.
 function renderEmptyHint(): void {
   const hint = document.getElementById("emptyHint")!;
   hint.style.display = !isViewMode && state.participants.length === 0 ? "block" : "none";
 }
 
-// Пустое имя при выходе из редактирования не применяется — остаётся то, что было.
 function commitOrRevertEditing(id: number): void {
   const p = state.participants.find((x) => x.id === id);
   if (p && p.name.trim() === "") p.name = editingOriginalName;
 }
 
-// Переключение на редактирование другой строки сперва закрывает текущую
-// (применяя или откатывая её значение), а не оставляет обе строки открытыми.
 function startEditing(p: Participant): void {
   if (editingId !== null && editingId !== p.id) {
     commitOrRevertEditing(editingId);
@@ -264,8 +245,6 @@ function escapeHtml(str: string): string {
   return div.innerHTML;
 }
 
-// Текстовый дамп распарсенных маршрутов (точки в пикселях картинки 512x512) —
-// чтобы видеть точные координаты вместо разглядывания картинки.
 function renderDebug(): void {
   const pre = document.getElementById("debugOutput");
   if (!pre) return;
@@ -286,8 +265,6 @@ function renderDebug(): void {
 
   pre.textContent = lines.join("\n\n");
 }
-
-/* ---------- отрисовка канвы ---------- */
 
 function pointAtDistance(points: Route["points"], cum: number[], d: number) {
   if (d <= 0) return points[0];
@@ -315,8 +292,6 @@ function drawScene(now: number): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  // Та же активная строка, что подсвечена в списке справа, — тот же индекс
-  // (маршрут привязан к слоту-позиции, а не к id участника, см. buildRoutes).
   const activeIdx =
     dragFromIndex !== null
       ? dragFromIndex
@@ -351,7 +326,6 @@ function drawScene(now: number): void {
       const cum = cumulative(route.points);
       const total = cum[cum.length - 1];
       if (total > 0) {
-        // Путь из пресета всегда замкнутый контур — бежим по кругу непрерывно.
         const phase = (idx / Math.max(1, state.routes.length)) * total;
         const t = ((now / 1000) * RUN_SPEED_PX_S + phase) % total;
         const pos = pointAtDistance(route.points, cum, t);
@@ -395,7 +369,6 @@ function drawRunner(x: number, y: number, color: string): void {
   ctx.restore();
 }
 
-// Имя участника "ездит" вместе с бегущей точкой — привязано по центру сверху.
 function drawNameLabel(x: number, y: number, name: string, color: string): void {
   ctx.save();
   ctx.font = "bold 11px sans-serif";
@@ -416,8 +389,6 @@ function tick(now: number): void {
   requestAnimationFrame(tick);
 }
 
-/* ---------- монтирование ---------- */
-
 export async function mountRuntime(): Promise<void> {
   canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
   ctx = canvas.getContext("2d")!;
@@ -434,8 +405,6 @@ export async function mountRuntime(): Promise<void> {
   canvas.height = img.naturalHeight;
   state.presetData = presetData;
 
-  // Ссылка вида ?h=... — чужой готовый расклад открывается в режиме просмотра:
-  // имена/порядок подставлены, но ничего в нём менять нельзя.
   const h = new URLSearchParams(location.search).get("h");
   const shared = h ? decodeShareState(h) : null;
   if (shared) {

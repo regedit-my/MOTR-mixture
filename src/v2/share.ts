@@ -1,6 +1,3 @@
-// Кодируем состояние (сколько участников, их имена и порядок = назначение
-// линий) в компактную URL-safe строку для параметра ?h=... — так ссылкой
-// можно поделиться, и у всех откроется та же раскладка имён по линиям.
 export interface ShareState {
   n: number;
   names: string[];
@@ -31,7 +28,6 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       await navigator.clipboard.writeText(text);
       return true;
     } catch {
-      // упадёт в prompt ниже
     }
   }
   prompt("Скопируй ссылку вручную:", text);

@@ -14,17 +14,15 @@ const editorState: EditorState = {
   maps: {},
 };
 
-const HIT_RADIUS = 10; // px в координатах канвы (512x512)
+const HIT_RADIUS = 10;
 const EDGE_HIT_RADIUS = 8;
-const DBLCLICK_WINDOW_MS = 240; // пауза перед "добавить точку", чтобы успеть поймать dblclick
+const DBLCLICK_WINDOW_MS = 240;
 const MIN_N = 4;
 const MAX_N = 12;
 
 let img: HTMLImageElement;
 let editorCanvas: HTMLCanvasElement;
 let editorCtx: CanvasRenderingContext2D;
-
-/* ---------- загрузка/нормализация данных ---------- */
 
 function emptyMaps(): Record<string, PresetMap> {
   const maps: Record<string, PresetMap> = {};
@@ -34,9 +32,6 @@ function emptyMaps(): Record<string, PresetMap> {
   return maps;
 }
 
-// Гарантирует, что у каждого _4.._12 ровно N путей (на случай, если в preset.json
-// чего-то не хватает или структура повреждена) — дополняет/обрезает, не трогая
-// уже существующие точки.
 function normalizeMaps(raw: PresetData | null): Record<string, PresetMap> {
   const maps = emptyMaps();
   if (raw?.maps) {
@@ -56,7 +51,6 @@ function normalizeMaps(raw: PresetData | null): Record<string, PresetMap> {
   return maps;
 }
 
-
 async function fetchPreset(): Promise<PresetData | null> {
   try {
     const r = await fetch(`preset.json`);
@@ -70,8 +64,6 @@ async function loadEditor(): Promise<void> {
   editorState.maps = normalizeMaps(await fetchPreset());
   initEditorUI();
 }
-
-/* ---------- инициализация UI ---------- */
 
 function initEditorUI(): void {
   renderTabs();
@@ -95,6 +87,7 @@ function renderTabs(): void {
 function selectTab(n: number): void {
   editorState.activeN = n;
   editorState.activePlayerIdx = 0;
+  selectedPointIdx = null;
   renderTabs();
   renderPlayers();
   drawEditorScene();
@@ -129,6 +122,7 @@ function renderPlayers(): void {
     row.append(badge, info);
     row.addEventListener("click", () => {
       editorState.activePlayerIdx = idx;
+      selectedPointIdx = null;
       renderPlayers();
       drawEditorScene();
     });
@@ -153,6 +147,7 @@ function bindEditorButtons(): void {
 
   document.getElementById("clearPathBtn")!.addEventListener("click", () => {
     activePath().points = [];
+    selectedPointIdx = null;
     renderPlayers();
     drawEditorScene();
     updateJsonOutput();
@@ -164,8 +159,6 @@ function bindEditorButtons(): void {
     selectTab(editorState.activeN);
   });
 }
-
-/* ---------- геометрия ---------- */
 
 function getEditorPoint(evt: PointerEvent | MouseEvent): Point {
   const rect = editorCanvas.getBoundingClientRect();
@@ -198,8 +191,6 @@ function findPointNear(points: Point[], p: Point): number {
   return -1;
 }
 
-// Возвращает индекс сегмента (i), к которому ближе всего точка p, если это
-// достаточно близко — новую точку нужно вставить ПОСЛЕ points[i].
 function findSegmentNear(points: Point[], p: Point): number {
   if (points.length < 2) return -1;
   let best = -1;
@@ -216,8 +207,6 @@ function findSegmentNear(points: Point[], p: Point): number {
   return best;
 }
 
-/* ---------- взаимодействие с канвой ---------- */
-
 interface DragInfo {
   idx: number;
   pointerId: number;
@@ -226,6 +215,7 @@ interface DragInfo {
 
 let dragInfo: DragInfo | null = null;
 let pendingAppend: { timeoutId: number } | null = null;
+let selectedPointIdx: number | null = null;
 
 function bindEditorCanvas(): void {
   editorCanvas.style.touchAction = "none";
@@ -234,10 +224,12 @@ function bindEditorCanvas(): void {
     const p = getEditorPoint(e);
     const path = activePath();
     const idx = findPointNear(path.points, p);
+    selectedPointIdx = idx >= 0 ? idx : null;
     if (idx >= 0) {
       dragInfo = { idx, pointerId: e.pointerId, moved: false };
       editorCanvas.setPointerCapture(e.pointerId);
     }
+    drawEditorScene();
   });
 
   editorCanvas.addEventListener("pointermove", (e) => {
@@ -257,8 +249,6 @@ function bindEditorCanvas(): void {
       return;
     }
 
-    // Обычный клик по пустому месту (не по точке) — запланировать добавление
-    // точки в конец пути, но дать шанс dblclick его отменить.
     const p = getEditorPoint(e);
     if (pendingAppend) {
       clearTimeout(pendingAppend.timeoutId);
@@ -266,7 +256,9 @@ function bindEditorCanvas(): void {
     }
     const timeoutId = window.setTimeout(() => {
       pendingAppend = null;
-      activePath().points.push(p);
+      const path = activePath();
+      path.points.push(p);
+      selectedPointIdx = path.points.length - 1;
       renderPlayers();
       drawEditorScene();
       updateJsonOutput();
@@ -290,13 +282,28 @@ function bindEditorCanvas(): void {
         path.points.splice(segIdx + 1, 0, p);
       }
     }
+    selectedPointIdx = null;
+    renderPlayers();
+    drawEditorScene();
+    updateJsonOutput();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Backspace" && e.key !== "Delete") return;
+    if (selectedPointIdx === null) return;
+    e.preventDefault();
+    const path = activePath();
+    if (selectedPointIdx >= path.points.length) {
+      selectedPointIdx = null;
+      return;
+    }
+    path.points.splice(selectedPointIdx, 1);
+    selectedPointIdx = null;
     renderPlayers();
     drawEditorScene();
     updateJsonOutput();
   });
 }
-
-/* ---------- отрисовка ---------- */
 
 function drawEditorScene(): void {
   editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
@@ -306,7 +313,7 @@ function drawEditorScene(): void {
     const color = ROUTE_PALETTE[idx % ROUTE_PALETTE.length];
     const isActive = idx === editorState.activePlayerIdx;
     if (path.points.length < 2) {
-      if (path.points.length === 1 && isActive) drawPointHandle(path.points[0], color, true);
+      if (path.points.length === 1 && isActive) drawPointHandle(path.points[0], color, true, selectedPointIdx === 0);
       return;
     }
 
@@ -321,29 +328,40 @@ function drawEditorScene(): void {
     for (let i = 1; i < path.points.length; i++) {
       editorCtx.lineTo(path.points[i].x, path.points[i].y);
     }
-    editorCtx.closePath(); // путь всегда замкнутый контур
+    editorCtx.closePath();
     editorCtx.stroke();
     editorCtx.restore();
 
     if (isActive) {
-      path.points.forEach((pt, i) => drawPointHandle(pt, color, i === 0));
+      path.points.forEach((pt, i) => drawPointHandle(pt, color, i === 0, i === selectedPointIdx));
     }
   });
 }
 
-function drawPointHandle(pt: Point, color: string, isFirst: boolean): void {
+function drawPointHandle(pt: Point, color: string, isFirst: boolean, isSelected: boolean): void {
+  const r = isFirst ? 7 : 5;
+
+  if (isSelected) {
+    editorCtx.save();
+    editorCtx.beginPath();
+    editorCtx.setLineDash([3, 3]);
+    editorCtx.arc(pt.x, pt.y, r + 5, 0, Math.PI * 2);
+    editorCtx.lineWidth = 2;
+    editorCtx.strokeStyle = "#ffffff";
+    editorCtx.stroke();
+    editorCtx.restore();
+  }
+
   editorCtx.save();
   editorCtx.beginPath();
-  editorCtx.arc(pt.x, pt.y, isFirst ? 7 : 5, 0, Math.PI * 2);
+  editorCtx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
   editorCtx.fillStyle = color;
   editorCtx.fill();
-  editorCtx.lineWidth = 1.5;
-  editorCtx.strokeStyle = "rgba(0,0,0,0.7)";
+  editorCtx.lineWidth = isSelected ? 2.5 : 1.5;
+  editorCtx.strokeStyle = isSelected ? "#ffffff" : "rgba(0,0,0,0.7)";
   editorCtx.stroke();
   editorCtx.restore();
 }
-
-/* ---------- JSON-превью ---------- */
 
 function updateJsonOutput(): void {
   const rounded: Record<string, PresetMap> = {};
@@ -356,8 +374,6 @@ function updateJsonOutput(): void {
   }
   document.getElementById("presetOutput")!.textContent = JSON.stringify({ maps: rounded }, null, 2);
 }
-
-/* ---------- монтирование ---------- */
 
 export async function mountEditor(): Promise<void> {
   editorCanvas = document.getElementById("editorCanvas") as HTMLCanvasElement;
